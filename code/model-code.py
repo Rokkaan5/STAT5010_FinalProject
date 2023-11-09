@@ -44,16 +44,16 @@ plt.savefig('pics.png', dpi=300)
 split_index = round(new_df.shape[0] * 0.8)
 
 test = new_df[split_index:]
-new_df = new_df[:split_index]
+train = new_df[:split_index]
 
 # %%
 # KNN
 KNN = KNeighborsClassifier(n_neighbors=1, metric='cosine', n_jobs=-1)
 
-KNN.fit(X = new_df.iloc[:, [6,7,8,9,12,14,15,
+KNN.fit(X = train.iloc[:, [6,7,8,9,12,14,15,
                             36,37,38,39,42,44,45,
                             66,67,68,69,72,74,75,
-                            96,97,98,99,102,104,105]], y = new_df.loc[:, 'pi_cat'])
+                            96,97,98,99,102,104,105]], y = train.loc[:, 'pi_cat'])
 
 # %%
 preds = KNN.predict(test.iloc[:, [6,7,8,9,12,14,15,
