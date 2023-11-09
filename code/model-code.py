@@ -21,8 +21,8 @@ from keras import backend as K
 import os,sys
 
 # %%
-src_file_dir = os.path.dirname(os.path.realpath(__file__))
-os.chdir(src_file_dir) 
+src_file_dir = os.path.dirname(os.path.realpath(__file__))  # obtain path to directory holding this file
+os.chdir(src_file_dir)                                      # change working directory to this directory
 new_df = pd.read_csv("../data/new_df.csv")
 new_df.drop(columns = 'Unnamed: 0', inplace=True)
 
@@ -55,13 +55,18 @@ KNN.fit(X = train.iloc[:, [6,7,8,9,12,14,15,
                             66,67,68,69,72,74,75,
                             96,97,98,99,102,104,105]], y = train.loc[:, 'pi_cat'])
 
-# %%
+# %%time
 preds = KNN.predict(test.iloc[:, [6,7,8,9,12,14,15,
                             36,37,38,39,42,44,45,
                             66,67,68,69,72,74,75,
-                            96,97,98,99,102,104,105]])
+                            96,97,98,99,102,104,105]].values)
 
-# %%
+KNN_proba = KNN.predict_proba(test.iloc[:, [6,7,8,9,12,14,15,
+                            36,37,38,39,42,44,45,
+                            66,67,68,69,72,74,75,
+                            96,97,98,99,102,104,105]].values)
+
+# %%time
 confusion_matrix(test.loc[:, 'pi_cat'], preds)
 
 # %%
