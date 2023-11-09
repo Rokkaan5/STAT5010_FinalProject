@@ -1,0 +1,166 @@
+---
+title: "Stat 5600 final project"
+author: "Ujas Shah"
+date: "10/30/2022"
+output: html_document
+---
+```{r}
+library(tidymodels)
+library(zoo)
+library(forecast)
+```
+
+## Importing the data
+```{r}
+data <- read.table('/Users/ujas/Desktop/STAT_5600/Project/UJAS SHAS/Met Data/met_mlo_insitu_1_obop_hour_2000.txt')
+
+for (i in 2001:2019){
+  path = paste0('/Users/ujas/Desktop/STAT_5600/Project/UJAS SHAS/Met Data/met_mlo_insitu_1_obop_hour_', i, '.txt')
+  temp = read.table(path)
+  data = rbind(data, temp)
+}
+
+colnames(data) <- c("site_code", "year", "month", "day", "hour", "wind_direction", "wind_speed", "wind_steadiness_factor", "barometric_pressure", "temp_at_2", "temp_at_10", "temp_at_top", "relative_humidity", "precipitation_intensity")
+
+data$wind_steadiness_factor[data$wind_steadiness_factor == -9] = NA
+data[data == -999] = NA
+data[data == -999.9] = NA
+data[data == -99] = NA
+data[data == -99.9] = NA
+```
+
+Imputing missing values
+```{r}
+cols_to_impute <- colnames(data)[! colnames(data) %in% c("site_code","year","month","day","hour")]
+
+for (i in cols_to_impute) {
+  data[i] <- data.frame(na.approx(data[i],rule=2))
+}
+```
+
+Feature engineering
+```{r}
+data$date = paste0(data$year, "-", data$month, "-", data$day)
+data$date = as.Date(data$date)
+
+data$ah <- ((0.000002*data$temp_at_2^4)+(0.0002*data$temp_at_2^3)+(0.0095*data$temp_at_2^2)+(0.337*data$temp_at_2)+4.9034)*(data$relative_humidity/100) #calculating absolute humidity
+```
+
+Looking at the total rainfall by month.
+```{r}
+barchart <- data %>% group_by(month) %>% summarize(rainfall = sum(precipitation_intensity, na.rm=TRUE))
+
+barplot(barchart$rainfall, names = c("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"), xlab = "Month", ylab = "millimeters", main = "Total rainfall in Mauna Loa, Hawaii (by month)")
+```
+
+Looking at the number of extreme precipitation events
+```{r}
+sum(data$precipitation_intensity)/240 # Monthly precipitation
+
+quantile((data %>% group_by(date) %>% summarise(pi = sum(precipitation_intensity)))$pi,c(.86, .90, .95, .99)) # top quantiles for precipitation.
+```
+
+Looking at the difference in X values for these days
+```{r}
+cor(drop_na(data[,c("wind_direction", "wind_speed","wind_steadiness_factor","barometric_pressure","temp_at_2","temp_at_10","temp_at_top","relative_humidity","precipitation_intensity","ah")]))
+```
+
+## ARIMA
+
+Using the Auto-ARIMA method, to arrive at an ARIMA forecast. The model is not expected to perform well, but this is just to see anyway.
+```{r}
+data2 <- data %>% group_by(date) %>% summarise(pi = sum(precipitation_intensity))
+
+arima_mod <- auto.arima(data2$pi, stepwise = FALSE, parallel = TRUE, seasonal = TRUE)
+summary(arima_mod)
+```
+
+Checking residuals
+```{r}
+checkresiduals(arima_mod)
+```
+The ACF plot of the residuals from the ARIMA(1,0,2) model shows some correlation at the 27th lag. However, this is very likely to be just a attribute of the data and not a real auto correlation. This is because there is no reason to assume that rainfall today would be correlated with rainfall from four weeks ago. Overall, there is no autocorrelation, indicating that the residuals are behaving like white noise. A portmanteau test returns a large p-value, also suggesting that the residuals are white noise.
+
+However, testing the ARIMA model it is pretty clear as was expected that the model does not perform very well.
+```{r}
+arima_mod <- auto.arima(data2[1:5689,]$pi, stepwise = FALSE, parallel = TRUE, seasonal = TRUE)
+forecast(arima_mod,3)
+```
+These forecasts should be compared with the numbers below which are the actual amount of rainfall for those days.
+```{r}
+data2[5690:5692,]$pi
+```
+
+
+Creating new_df which includes the predictors and the response
+```{r}
+new_df <- data[,c("year","month","day","hour","date")]
+new_df$pi24 <- rollsum(data$precipitation_intensity, 24, align = 'left', fill=NA)
+
+temp <- data.frame(rollmean(data[, c('wind_direction','wind_speed',"wind_steadiness_factor",
+                                       "barometric_pressure","temp_at_2","temp_at_10","temp_at_top",
+                                       "relative_humidity","ah", "precipitation_intensity")], 
+                              3,
+                              align="right",
+                              fill = NA))
+
+colnames(temp) <- c("wd","ws","wsf","bp","t2","t10","tt","rh","ah","pi")
+
+new_df <- cbind(new_df, temp)
+```
+
+```{r}
+summary(new_df[new_df$pi24>=15,][,c("pi","ws","wsf","bp","t2","t10","tt","rh","ah")])
+```
+
+```{r}
+summary(new_df[new_df$pi24<15,][,c("pi","ws","wsf","bp","t2","t10","tt","rh","ah")])
+```
+Normalizing variables
+
+```{r}
+new_df[, c("wd","ws","wsf","bp","t2","t10","tt","rh","ah","pi")] <- scale(new_df[, c("wd","ws","wsf","bp","t2","t10","tt","rh","ah","pi")])
+```
+
+
+
+Also adding lagged variables
+```{r}
+for (i in 1:48) {
+  lagged_temp <- lag(new_df[,c("wd","ws","wsf","bp","t2","t10","tt","rh","ah","pi")],i)
+  colnames(lagged_temp) <- paste0(c("wd","ws","wsf","bp","t2","t10","tt","rh","ah","pi"),i)
+
+  new_df <- cbind(new_df, lagged_temp)
+}
+
+new_df <- drop_na(new_df)
+
+new_df$pi_cat <- ifelse(new_df$pi24 >15, 1, 0)
+
+new_df$pi_cat <- as.factor(new_df$pi_cat)
+
+```
+
+```{r}
+split_index <- round(dim(new_df)[1]*0.8)
+train <- new_df[1:split_index,]
+test <- new_df[split_index:dim(new_df)[1],]
+
+knn_spec <- nearest_neighbor(neighbors=1, mode= 'classification') %>% set_engine('kknn')
+
+knn_fit <- knn_spec%>% fit_xy(x = train[,7:16],
+                              y = train[,'pi_cat'])
+
+knn_fit
+```
+
+Knn wouldn't work very well because of issues that Shashi and Sam pointed out before.
+```{r}
+augment(knn_fit, new_data=test)  %>% conf_mat(truth=pi_cat, estimate = .pred_class)
+```
+
+## R does not seem to be fast enough to run these models, this is pretty apparent from the time it took to predict with the KNN model. Henceforth, the analysis will be done on python, the cleaned data is written on a CSV so that it could be imported again on python.
+
+```{r}
+write.csv(new_df, "/Users/ujas/Desktop/STAT_5600/Project/new_df.csv")
+```
