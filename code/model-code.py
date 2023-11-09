@@ -35,9 +35,9 @@ new_df.iloc[:, 6:496] = scaler.fit_transform(new_df.iloc[:, 6:496])
 # ## Density diagarams of the different variables per class
 
 # %%
-new_df.pi_cat = np.where(new_df.pi24>15,1,0)
+new_df['pi_cat'] = np.where(new_df.pi24>15,1,0)
 
-sns.kdeplot(new_df.ah, hue = new_df.pi_cat).set(title='Distribution of absolute humidity')
+sns.kdeplot(data=new_df,x="ah", hue ="pi_cat").set(title='Distribution of absolute humidity')
 plt.savefig('pics.png', dpi=300)
 
 # %%
@@ -46,10 +46,8 @@ split_index = round(new_df.shape[0] * 0.8)
 test = new_df[split_index:]
 new_df = new_df[:split_index]
 
-# %% [markdown]
-# # KNN
-
 # %%
+# KNN
 KNN = KNeighborsClassifier(n_neighbors=1, metric='cosine', n_jobs=-1)
 
 KNN.fit(X = new_df.iloc[:, [6,7,8,9,12,14,15,
