@@ -63,7 +63,7 @@ cor(drop_na(data[,c("wind_direction", "wind_speed","wind_steadiness_factor","bar
 # Creating new_df which includes the predictors and the response
 
 new_df <- data[,c("year","month","day","hour","date")]
-new_df$pi24 <- rollsum(data$precipitation_intensity, 24, align = 'left', fill=NA)
+new_df$pi_24 <- rollsum(data$precipitation_intensity, 24, align = 'left', fill=NA)
 
 temp <- data.frame(rollmean(data[, c('wind_direction','wind_speed',"wind_steadiness_factor",
                                        "barometric_pressure","temp_at_2","temp_at_10","temp_at_top",
@@ -77,10 +77,10 @@ colnames(temp) <- c("wd","ws","wsf","bp","t2","t10","tt","rh","ah","pi")
 new_df <- cbind(new_df, temp)
 
 
-summary(new_df[new_df$pi24>=15,][,c("pi","ws","wsf","bp","t2","t10","tt","rh","ah")])
+summary(new_df[new_df$pi_24>=15,][,c("pi","ws","wsf","bp","t2","t10","tt","rh","ah")])
 
 
-summary(new_df[new_df$pi24<15,][,c("pi","ws","wsf","bp","t2","t10","tt","rh","ah")])
+summary(new_df[new_df$p_24<15,][,c("pi","ws","wsf","bp","t2","t10","tt","rh","ah")])
 
 # Normalizing variables
 
@@ -101,9 +101,9 @@ for (i in 1:48) {
 
 new_df <- drop_na(new_df)
 
-new_df$pi_cat <- ifelse(new_df$pi24 >15, 1, 0)
+new_df$pi_cat <- ifelse(new_df$pi_24 >15, 1, 0)
 
 new_df$pi_cat <- as.factor(new_df$pi_cat)
 
 # save df to csv
-write.csv(new_df, "../data/new_df.csv")
+write.csv(new_df, "../data/new_df2.csv")
